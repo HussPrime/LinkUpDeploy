@@ -2,7 +2,7 @@ import multer from "multer";
 import path from "path";
 import fs from "fs";
 
-const uploadDir = "src/uploads/photos";
+const uploadDir = "uploads/photos";
 fs.mkdirSync(uploadDir, { recursive: true });
 
 const storage = multer.diskStorage({

@@ -269,7 +269,7 @@ router.put("/me/avatar", authRequired, uploadAvatar.single("avatar"), async (req
     // Delete old avatar if it was stored in our uploads folder
     if (dbUser.image) {
       const oldFilename = String(dbUser.image).split("/").pop();
-      const oldFsPath = path.join(process.cwd(), "src", "uploads", "avatars", oldFilename);
+      const oldFsPath = path.join(process.cwd(), "uploads", "avatars", oldFilename);
       if (oldFilename && fs.existsSync(oldFsPath)) {
         fs.unlinkSync(oldFsPath);
       }
@@ -336,7 +336,7 @@ router.delete("/me/photos/:photoId", authRequired, async (req, res, next) => {
 
     // Delete from disk
     const filename = String(photo.photo_url).split("/").pop();
-    const fsPath = path.join(process.cwd(), "src", "uploads", "photos", filename);
+    const fsPath = path.join(process.cwd(), "uploads", "photos", filename);
     if (filename && fs.existsSync(fsPath)) {
       fs.unlinkSync(fsPath);
     }
