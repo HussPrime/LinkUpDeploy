@@ -114,6 +114,20 @@ if (!u.id)
       "SELECT * FROM `user` WHERE id=? LIMIT 1", 
       [u.id]
     );
+    
+    // Check if user is banned
+    if (dbUser?.banned_at) {
+      const isPermanent = !dbUser.banned_until;
+      const isStillBanned = isPermanent || new Date(dbUser.banned_until) > new Date();
+      if (isStillBanned) {
+        return res.status(403).json({
+          error: "Compte suspendu",
+          banned: true,
+          bannedUntil: dbUser.banned_until,
+          banReason: dbUser.ban_reason,
+        });
+      }
+    }
 	
     const isAdmin = ADMIN_EMAILS.includes((u.email || "").toLowerCase());
 
@@ -123,7 +137,12 @@ if (!u.id)
       user: dbUserToAppUser(dbUser),
       profile: dbUserToProfile(dbUser),
       needs_onboarding: !isProfileComplete(dbUser),
-	  is_admin: isAdmin,
+	    is_admin: isAdmin,
+        notifications: {
+        newMessages: !!dbUser?.notif_new_messages,
+        newMatches:  !!dbUser?.notif_new_matches,
+        newReports:  !!dbUser?.notif_new_reports,
+      },
     });
   } catch (err) {
     next(err);

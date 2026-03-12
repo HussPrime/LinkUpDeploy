@@ -212,6 +212,17 @@ router.post("/messages/:messageId/report", authRequired, async (req, res, next) 
       "INSERT INTO message_reports (message_id, user_id, match_id, reported_at) VALUES (?, ?, ?, NOW())",
       [messageId, userId, matchId]
     );
+    
+    // Notify admins in real-time
+    const io = req.app.get("io");
+    if (io) {
+      io.to("admin").emit("admin:report:message", {
+        messageId,
+        matchId,
+        reportedAt: new Date().toISOString(),
+      });
+    }
+
     res.json({ success: true });
   } catch (e) {
     next(e);

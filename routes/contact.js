@@ -15,6 +15,16 @@ router.post("/", authRequired, async (req, res, next) => {
       "INSERT INTO contact_reports (user_id, sujet, message, created_at) VALUES (?, ?, ?, NOW())",
       [userId, sujet, message]
     );
+    
+    // Notify admins in real-time
+    const io = req.app.get("io");
+    if (io) {
+      io.to("admin").emit("admin:report:contact", {
+        sujet,
+        createdAt: new Date().toISOString(),
+      });
+    }
+
     res.json({ success: true });
   } catch (e) {
     next(e);

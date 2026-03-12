@@ -3,6 +3,7 @@ import { pool } from "../db.js";
 import { authRequired } from "../middleware/authRequired.js";
 import { scoreCandidate } from "../services/matching.js";
 import { uploadAvatar } from "../middleware/uploadAvatar.js";
+import { uploadPhoto } from "../middleware/uploadPhoto.js";
 import { dbUserToAppUser, dbUserToProfile } from "../utils/user.js";
 
 import fs from "fs";
@@ -29,10 +30,16 @@ router.get("/me", authRequired, async (req, res, next) => {
       [userId]
     );
 
+    const [photos] = await pool.execute(
+      "SELECT id, photo_url, sort_order FROM profile_photos WHERE user_id=? ORDER BY sort_order ASC, id ASC",
+      [userId]
+    );
+
     res.json({
       user: dbUserToAppUser(dbUser),
       profile: dbUserToProfile(dbUser),
       experiences,
+      photos,
     });
   } catch (e) {
     next(e);
@@ -82,7 +89,8 @@ router.get("/recommendations", authRequired, async (req, res, next) => {
        WHERE id <> ?
          AND TRIM(COALESCE(filiere,'')) <> ''
          AND TRIM(COALESCE(annee_etude,'')) <> ''
-         AND COALESCE(privacy_visible, 1) = 1`;  /* exclude hidden profiles */
+         AND COALESCE(privacy_visible, 1) = 1
+         AND (banned_at IS NULL OR banned_until IS NOT NULL AND banned_until <= NOW())`;
     const candParams = [meId];
 
     if (sameFiliereOnly && myProfile?.filiere) {
@@ -100,6 +108,8 @@ router.get("/recommendations", authRequired, async (req, res, next) => {
 
     const ids = candidates.map((c) => c.id);
     const expByUser = new Map();
+    const photosByUser = new Map();
+
     if (ids.length) {
       const placeholders = ids.map(() => "?").join(",");
       const [expRows] = await pool.query(
@@ -111,6 +121,16 @@ router.get("/recommendations", authRequired, async (req, res, next) => {
         arr.push(e);
         expByUser.set(e.profile_id, arr);
       }
+      
+      const [photoRows] = await pool.query(
+        `SELECT id, user_id, photo_url, sort_order FROM profile_photos WHERE user_id IN (${placeholders}) ORDER BY sort_order ASC, id ASC`,
+        ids
+      );
+      for (const p of photoRows) {
+        const arr = photosByUser.get(p.user_id) || [];
+        arr.push(p);
+        photosByUser.set(p.user_id, arr);
+      }
     }
 
     const ranked = candidates
@@ -119,6 +139,7 @@ router.get("/recommendations", authRequired, async (req, res, next) => {
         user: dbUserToAppUser(c),
         profile: dbUserToProfile(c),
         experiences: expByUser.get(c.id) || [],
+        photos: photosByUser.get(c.id) || [],
       }))
       .map((c) => ({ ...c, score: scoreCandidate(myProfile || {}, myExp, mySkillsSet, c) }))
       .sort((a, b) => b.score - a.score)
@@ -164,10 +185,16 @@ router.get("/:userId", authRequired, async (req, res, next) => {
       [userId]
     );
 
+    const [photos] = await pool.execute(
+      "SELECT id, photo_url, sort_order FROM profile_photos WHERE user_id=? ORDER BY sort_order ASC, id ASC",
+      [userId]
+    );
+
     res.json({
       user: dbUserToAppUser(dbUser),
       profile: dbUserToProfile(dbUser),
       experiences,
+      photos,
     });
   } catch (e) {
     next(e);
@@ -256,6 +283,67 @@ router.put("/me/avatar", authRequired, uploadAvatar.single("avatar"), async (req
     );
 
     res.json({ ok: true, avatar_url: avatarUrl });
+  } catch (e) {
+    next(e);
+  }
+});
+
+
+// POST /profiles/me/photos — ajouter une photo supplémentaire (max 5)
+router.post("/me/photos", authRequired, uploadPhoto.single("photo"), async (req, res, next) => {
+  try {
+    const userId = req.userId;
+    if (!req.file) return res.status(400).json({ error: "Aucune image envoyée" });
+
+    // Check limit (max 5 extra photos)
+    const [[countRow]] = await pool.execute(
+      "SELECT COUNT(*) AS cnt FROM profile_photos WHERE user_id=?",
+      [userId]
+    );
+    if (Number(countRow.cnt) >= 5) {
+      fs.unlinkSync(req.file.path);
+      return res.status(400).json({ error: "Maximum 5 photos supplémentaires autorisées" });
+    }
+
+    const [[maxOrder]] = await pool.execute(
+      "SELECT COALESCE(MAX(sort_order), -1) AS maxOrder FROM profile_photos WHERE user_id=?",
+      [userId]
+    );
+
+    const photoUrl = `${API_BASE}/api/uploads/photos/${req.file.filename}`;
+    const [r] = await pool.execute(
+      "INSERT INTO profile_photos (user_id, photo_url, sort_order) VALUES (?, ?, ?)",
+      [userId, photoUrl, Number(maxOrder.maxOrder) + 1]
+    );
+
+    res.json({ ok: true, photo: { id: Number(r.insertId), photo_url: photoUrl, sort_order: Number(maxOrder.maxOrder) + 1 } });
+  } catch (e) {
+    next(e);
+  }
+});
+
+// DELETE /profiles/me/photos/:photoId — supprimer une photo supplémentaire
+router.delete("/me/photos/:photoId", authRequired, async (req, res, next) => {
+  try {
+    const userId = req.userId;
+    const photoId = Number(req.params.photoId);
+
+    const [[photo]] = await pool.execute(
+      "SELECT * FROM profile_photos WHERE id=? AND user_id=? LIMIT 1",
+      [photoId, userId]
+    );
+    if (!photo) return res.status(404).json({ error: "Photo introuvable" });
+
+    // Delete from disk
+    const filename = String(photo.photo_url).split("/").pop();
+    const fsPath = path.join(process.cwd(), "src", "uploads", "photos", filename);
+    if (filename && fs.existsSync(fsPath)) {
+      fs.unlinkSync(fsPath);
+    }
+
+    await pool.execute("DELETE FROM profile_photos WHERE id=? AND user_id=?", [photoId, userId]);
+
+    res.json({ ok: true });
   } catch (e) {
     next(e);
   }

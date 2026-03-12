@@ -11,7 +11,7 @@ const router = Router();
 router.get("/", authRequired, async (req, res, next) => {
   try {
     const [[row]] = await pool.execute(
-      `SELECT notif_new_messages, notif_new_matches,
+      `SELECT notif_new_messages, notif_new_matches, notif_new_reports,
               privacy_visible, privacy_pause_matching
        FROM \`user\` WHERE id=? LIMIT 1`,
       [req.userId]
@@ -22,6 +22,7 @@ router.get("/", authRequired, async (req, res, next) => {
       notifications: {
         newMessages: !!row.notif_new_messages,
         newMatches:  !!row.notif_new_matches,
+        newReports:  !!row.notif_new_reports,
       },
       privacy: {
         visible:        !!row.privacy_visible,
@@ -44,6 +45,7 @@ router.put("/", authRequired, async (req, res, next) => {
       `UPDATE \`user\` SET
         notif_new_messages    = COALESCE(?, notif_new_messages),
         notif_new_matches     = COALESCE(?, notif_new_matches),
+        notif_new_reports     = COALESCE(?, notif_new_reports),
         privacy_visible       = COALESCE(?, privacy_visible),
         privacy_pause_matching = COALESCE(?, privacy_pause_matching),
         updatedAt             = CURRENT_TIMESTAMP(3)
@@ -51,6 +53,7 @@ router.put("/", authRequired, async (req, res, next) => {
       [
         notifications.newMessages  !== undefined ? (notifications.newMessages  ? 1 : 0) : null,
         notifications.newMatches   !== undefined ? (notifications.newMatches   ? 1 : 0) : null,
+                notifications.newReports   !== undefined ? (notifications.newReports   ? 1 : 0) : null,
         privacy.visible            !== undefined ? (privacy.visible            ? 1 : 0) : null,
         privacy.pauseMatching      !== undefined ? (privacy.pauseMatching      ? 1 : 0) : null,
         req.userId,

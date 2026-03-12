@@ -26,7 +26,8 @@ router.get("/users", ...guard, async (req, res, next) => {
   try {
     const [rows] = await pool.execute(
       `SELECT u.id, u.name, u.email, u.image, u.filiere, u.annee_etude, u.bio,
-              u.privacy_visible, u.privacy_pause_matching, u.createdAt
+              u.privacy_visible, u.privacy_pause_matching, u.createdAt,
+              u.banned_at, u.banned_until, u.ban_reason
        FROM \`user\` u
        ORDER BY u.createdAt DESC`
     );
@@ -77,6 +78,51 @@ router.post("/users", ...guard, async (req, res, next) => {
   } catch (e) {
     const msg = e?.body?.message || e?.message || "Erreur lors de la création.";
     res.status(400).json({ error: msg });
+  }
+});
+
+
+/* ── POST /api/admin/users/:userId/ban ── bannir un utilisateur ── */
+router.post("/users/:userId/ban", ...guard, async (req, res, next) => {
+  try {
+    const { userId } = req.params;
+    const { reason, duration } = req.body; // duration in hours, 0 or null = permanent
+
+    let bannedUntil = null;
+    if (duration && Number(duration) > 0) {
+      bannedUntil = new Date(Date.now() + Number(duration) * 60 * 60 * 1000);
+    }
+
+    await pool.execute(
+      "UPDATE `user` SET banned_at=NOW(), banned_until=?, ban_reason=?, updatedAt=CURRENT_TIMESTAMP(3) WHERE id=?",
+      [bannedUntil || null, reason || null, userId]
+    );
+
+    const io = req.app.get("io");
+    if (io) {
+      io.to(`user:${userId}`).emit("banned", {
+        bannedUntil: bannedUntil ? bannedUntil.toISOString() : null,
+        reason: reason || null,
+      });
+    }
+
+    res.json({ ok: true });
+  } catch (e) {
+    next(e);
+  }
+});
+
+/* ── POST /api/admin/users/:userId/unban ── débannir un utilisateur ── */
+router.post("/users/:userId/unban", ...guard, async (req, res, next) => {
+  try {
+    const { userId } = req.params;
+    await pool.execute(
+      "UPDATE `user` SET banned_at=NULL, banned_until=NULL, ban_reason=NULL, updatedAt=CURRENT_TIMESTAMP(3) WHERE id=?",
+      [userId]
+    );
+    res.json({ ok: true });
+  } catch (e) {
+    next(e);
   }
 });
 

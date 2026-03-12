@@ -28,6 +28,24 @@ export async function authRequired(req, res, next) {
            updatedAt=CURRENT_TIMESTAMP(3)`,
         [u.id, u.name || null, u.email || null, u.image || null, "", ""]
       );
+
+      // Check if user is banned
+      const [[banCheck]] = await pool.execute(
+        "SELECT banned_at, banned_until, ban_reason FROM `user` WHERE id=? LIMIT 1",
+        [req.userId]
+      );
+      if (banCheck?.banned_at) {
+        const isPermanent = !banCheck.banned_until;
+        const isStillBanned = isPermanent || new Date(banCheck.banned_until) > new Date();
+        if (isStillBanned) {
+          return res.status(403).json({
+            error: "Compte suspendu",
+            banned: true,
+            bannedUntil: banCheck.banned_until,
+            banReason: banCheck.ban_reason,
+          });
+        }
+      }
     }
 
     next();
