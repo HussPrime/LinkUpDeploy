@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 180" role="img" aria-label="LinkUp icon refined centered">
+<defs>
+<linearGradient id="accentGlow" x1="0" y1="0" x2="1" y2="1">
+<stop offset="0" stop-color="#F07B4A" stop-opacity="0.75"/>
+<stop offset="1" stop-color="#E35A2B" stop-opacity="0.75"/>
+</linearGradient>
+</defs>
+ 
+  <!-- Tile -->
+<rect x="0" y="0" width="180" height="180" rx="46" fill="#FBF7F2"/>
+<rect x="0" y="0" width="180" height="180" rx="46" fill="url(#accentGlow)" opacity="0.08"/>
+ 
+  <!-- Centered mark -->
+<g fill="none" stroke-linecap="round" stroke-linejoin="round">
+<!-- Link (centered) -->
+<rect x="44" y="62" width="72" height="56" rx="28" stroke="#14110F" stroke-width="12"/>
+<rect x="64" y="62" width="72" height="56" rx="28" stroke="#14110F" stroke-width="12"/>
+ 
+    <!-- Center dot (orange) -->
+<circle cx="90" cy="90" r="7" fill="#E35A2B"/>
+ 
+    <!-- Arrow (centered under the link) -->
+<path d="M90 154V136" stroke="#E35A2B" stroke-width="12"/>
+<path d="M80 146L90 136L100 146" stroke="#E35A2B" stroke-width="12"/>
+</g>
+</svg>
